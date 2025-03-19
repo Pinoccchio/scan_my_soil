@@ -18,6 +18,23 @@ class ProfileSection extends StatefulWidget {
 class _ProfileSectionState extends State<ProfileSection> {
   final _supabaseService = SupabaseService();
   bool _isUploading = false;
+  bool _isSigningOut = false;
+  // Store references to providers to avoid accessing context in dispose
+  late AuthProvider _authProvider;
+  bool _mounted = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Safely store a reference to the AuthProvider
+    _authProvider = Provider.of<AuthProvider>(context, listen: false);
+  }
+
+  @override
+  void dispose() {
+    _mounted = false;
+    super.dispose();
+  }
 
   void _showProfilePicturePreview(String? imageUrl) {
     if (imageUrl == null || imageUrl.isEmpty) return;
@@ -87,6 +104,8 @@ class _ProfileSectionState extends State<ProfileSection> {
 
       if (image == null) return;
 
+      if (!_mounted) return;
+
       setState(() {
         _isUploading = true;
       });
@@ -96,10 +115,9 @@ class _ProfileSectionState extends State<ProfileSection> {
 
       if (imageUrl != null) {
         // Refresh profile data
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        await authProvider.checkAuthState();
+        await _authProvider.checkAuthState();
 
-        if (mounted) {
+        if (_mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Profile picture updated successfully'),
@@ -109,7 +127,7 @@ class _ProfileSectionState extends State<ProfileSection> {
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (_mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error uploading image: $e'),
@@ -118,21 +136,22 @@ class _ProfileSectionState extends State<ProfileSection> {
         );
       }
     } finally {
-      setState(() {
-        _isUploading = false;
-      });
+      if (_mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
     }
   }
 
   // Show sign out confirmation dialog
   Future<void> _showSignOutConfirmationDialog() async {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
           shape: RoundedRectangleBorder(
@@ -149,7 +168,7 @@ class _ProfileSectionState extends State<ProfileSection> {
                 ),
               ),
               onPressed: () {
-                Navigator.of(context).pop();
+                Navigator.of(dialogContext).pop();
               },
             ),
             TextButton(
@@ -160,13 +179,12 @@ class _ProfileSectionState extends State<ProfileSection> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                // Sign out and navigate back to sign in screen
-                await authProvider.signOut();
-                if (mounted) {
-                  Navigator.pushReplacementNamed(context, '/signin');
-                }
+              onPressed: () {
+                // Close the dialog first
+                Navigator.of(dialogContext).pop();
+
+                // Perform sign out
+                _performSignOut();
               },
             ),
           ],
@@ -175,8 +193,34 @@ class _ProfileSectionState extends State<ProfileSection> {
     );
   }
 
+  // Separate method to handle sign out process
+  Future<void> _performSignOut() async {
+    if (!_mounted) return;
+
+    // Set signing out state to prevent UI updates
+    setState(() {
+      _isSigningOut = true;
+    });
+
+    // Navigate to sign in screen immediately
+    // This prevents seeing the profile with default values
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/signin', (route) => false);
+    });
+
+    // Then perform the actual sign out in the background
+    await _authProvider.signOut();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // If signing out, show a loading indicator instead of profile content
+    if (_isSigningOut) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
     final themeProvider = Provider.of<ThemeProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context);
     final isDarkMode = themeProvider.isDarkMode;
@@ -466,3 +510,4 @@ class _ProfileSectionState extends State<ProfileSection> {
     );
   }
 }
+

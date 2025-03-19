@@ -1,90 +1,150 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../models/soil_analysis.dart';
 import '../services/supabase_service.dart';
+import '../screens/analysis_detail_screen.dart';
 
 class DatasetsSection extends StatefulWidget {
-  const DatasetsSection({super.key});
+  final VoidCallback? onScanButtonPressed;
+
+  const DatasetsSection({
+    super.key,
+    this.onScanButtonPressed,
+  });
 
   @override
   State<DatasetsSection> createState() => _DatasetsSectionState();
 }
 
 class _DatasetsSectionState extends State<DatasetsSection> {
-  final _supabaseService = SupabaseService();
-  bool _isLoading = false;
-  String _filterType = 'All';
-  List<Map<String, dynamic>> _datasets = [];
-  String? _errorMessage;
+  List<SoilAnalysis> _analyses = [];
+  bool _isLoading = true;
+  final SupabaseService _supabaseService = SupabaseService();
+  bool _mounted = true;
 
   @override
   void initState() {
     super.initState();
-    _loadDatasets();
+    _loadAnalyses();
   }
 
-  Future<void> _loadDatasets() async {
-    if (_isLoading) return;
+  @override
+  void dispose() {
+    _mounted = false;
+    super.dispose();
+  }
+
+  Future<void> _loadAnalyses() async {
+    if (!mounted) return;
 
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
-      final datasets = await _supabaseService.getSoilDatasets();
+      final analyses = await _supabaseService.getSoilAnalyses();
 
-      // Apply filters if needed
-      if (_filterType == 'Recent') {
-        datasets.sort((a, b) {
-          final aDate = DateTime.parse(a['created_at']);
-          final bDate = DateTime.parse(b['created_at']);
-          return bDate.compareTo(aDate);
-        });
-      } else if (_filterType == 'Favorites') {
-        datasets.removeWhere((dataset) => dataset['is_favorite'] != true);
-      }
+      if (!mounted) return;
 
       setState(() {
-        _datasets = datasets;
+        _analyses = analyses;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
-        _errorMessage = 'Failed to load datasets: $e';
         _isLoading = false;
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading analyses: ${e.toString()}'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
-  Future<void> _deleteDataset(int datasetId) async {
-    try {
-      await _supabaseService.deleteSoilDataset(datasetId);
-      await _loadDatasets();
+  Future<void> _showDeleteConfirmationDialog(SoilAnalysis analysis) async {
+    if (!mounted) return;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Dataset deleted successfully'),
-            backgroundColor: Colors.green,
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
+          title: const Text('Delete Analysis'),
+          content: const Text('Are you sure you want to delete this soil analysis? This action cannot be undone.'),
+          actions: <Widget>[
+            TextButton(
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                ),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text(
+                'Delete',
+                style: TextStyle(
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _performDeleteAnalysis(analysis);
+              },
+            ),
+          ],
         );
-      }
+      },
+    );
+  }
+
+  Future<void> _performDeleteAnalysis(SoilAnalysis analysis) async {
+    try {
+      await _supabaseService.deleteSoilAnalysis(analysis.id);
+
+      if (!mounted) return;
+
+      setState(() {
+        _analyses.removeWhere((a) => a.id == analysis.id);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Analysis deleted'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to delete dataset: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete analysis: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -99,61 +159,21 @@ class _DatasetsSectionState extends State<DatasetsSection> {
               ),
             ),
             Text(
-              'View and manage your soil analysis data',
+              'Your soil analysis history',
               style: TextStyle(
                 fontSize: 14,
-                color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                color: Colors.grey.shade600,
               ),
-              overflow: TextOverflow.ellipsis, // Prevent text overflow
             ),
             const SizedBox(height: 24),
 
-            // Search bar
-            TextField(
-              decoration: InputDecoration(
-                hintText: 'Search datasets',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              onChanged: (value) {
-                // TODO: Implement search functionality
-              },
-            ),
-
-            const SizedBox(height: 16),
-
-            // Filter chips
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip(context, 'All', _filterType == 'All'),
-                  _buildFilterChip(context, 'Recent', _filterType == 'Recent'),
-                  _buildFilterChip(context, 'Favorites', _filterType == 'Favorites'),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Error message
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: Colors.red.shade700),
-                ),
-              ),
-
-            // Datasets list
+            // Analysis list
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildDatasetsList(context),
+                  ? _buildLoadingIndicator()
+                  : _analyses.isEmpty
+                  ? _buildEmptyState()
+                  : _buildAnalysisList(),
             ),
           ],
         ),
@@ -161,361 +181,246 @@ class _DatasetsSectionState extends State<DatasetsSection> {
     );
   }
 
-  Widget _buildFilterChip(BuildContext context, String label, bool isSelected) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8.0),
-      child: FilterChip(
-        label: Text(label),
-        selected: isSelected,
-        onSelected: (bool selected) {
-          if (selected) {
-            setState(() {
-              _filterType = label;
-            });
-            _loadDatasets();
-          }
-        },
-        backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
-        selectedColor: Colors.green.shade100,
-        checkmarkColor: Colors.green.shade700,
-        labelStyle: TextStyle(
-          color: isSelected
-              ? Colors.green.shade700
-              : (isDarkMode ? Colors.grey.shade300 : Colors.grey.shade800),
-        ),
+  Widget _buildLoadingIndicator() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            color: Colors.green.shade600,
+          ),
+          const SizedBox(height: 16),
+          const Text('Loading your datasets...'),
+        ],
       ),
     );
   }
 
-  Widget _buildDatasetsList(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.science_outlined,
+            size: 80,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No soil analyses yet',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Scan a soil sample to get started',
+            style: TextStyle(
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: widget.onScanButtonPressed,
+            icon: const Icon(Icons.camera_alt),
+            label: const Text('Scan Soil'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade600,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24,
+                vertical: 12,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    if (_datasets.isEmpty) {
-      return Center(
+  Widget _buildAnalysisList() {
+    return RefreshIndicator(
+      onRefresh: _loadAnalyses,
+      color: Colors.green.shade600,
+      child: ListView.builder(
+        itemCount: _analyses.length,
+        itemBuilder: (context, index) {
+          final analysis = _analyses[index];
+          return _buildAnalysisCard(analysis);
+        },
+      ),
+    );
+  }
+
+  Widget _buildAnalysisCard(SoilAnalysis analysis) {
+    final dateFormat = DateFormat('MMM d, yyyy - h:mm a');
+
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AnalysisDetailScreen(analysis: analysis),
+            ),
+          ).then((_) {
+            if (mounted) {
+              _loadAnalyses();
+            }
+          });
+        },
+        borderRadius: BorderRadius.circular(16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.bar_chart_outlined,
-              size: 64,
-              color: isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No datasets yet',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Scan your first soil sample to create a dataset',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isDarkMode ? Colors.grey.shade500 : Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () {
-                // Navigate to scan screen
-                Navigator.pushNamed(context, '/scan');
-              },
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Scan Soil Sample'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            // Image section
+            if (analysis.imageUrl.isNotEmpty)
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+                child: CachedNetworkImage(
+                  imageUrl: analysis.imageUrl,
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    height: 150,
+                    color: Colors.grey.shade200,
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 150,
+                    color: Colors.grey.shade200,
+                    child: const Center(
+                      child: Icon(Icons.error),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      );
-    }
 
-    return RefreshIndicator(
-      onRefresh: _loadDatasets,
-      child: ListView.builder(
-        itemCount: _datasets.length,
-        itemBuilder: (context, index) {
-          final dataset = _datasets[index];
-          final nutrients = dataset['soil_nutrients'] ?? {};
-
-          // Format the date
-          String formattedDate = 'No date';
-          if (dataset['created_at'] != null) {
-            try {
-              final date = DateTime.parse(dataset['created_at']);
-              formattedDate = DateFormat('MMM d, yyyy').format(date);
-            } catch (e) {
-              // Use default value if date parsing fails
-            }
-          }
-
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
+            // Content section
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Text(
-                          dataset['name'] as String? ?? 'Unnamed Dataset',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          overflow: TextOverflow.ellipsis, // Prevent text overflow
+                      Text(
+                        dateFormat.format(analysis.timestamp),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
                         ),
                       ),
                       IconButton(
+                        onPressed: () => _showDeleteConfirmationDialog(analysis),
                         icon: Icon(
-                          Icons.more_vert,
-                          color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                          Icons.delete_outline,
+                          color: Colors.red.shade400,
+                          size: 20,
                         ),
-                        onPressed: () {
-                          _showDatasetOptions(context, dataset);
-                        },
                         constraints: const BoxConstraints(),
                         padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Delete analysis',
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Text(
+                    analysis.soilType,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Replace Row with Wrap for better responsiveness
+                  Wrap(
+                    spacing: 8, // horizontal space between chips
+                    runSpacing: 8, // vertical space between lines
                     children: [
-                      Icon(
-                        Icons.calendar_today,
-                        size: 14,
-                        color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          formattedDate,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                          ),
-                          overflow: TextOverflow.ellipsis, // Prevent text overflow
-                        ),
-                      ),
+                      _buildPropertyChip('pH: ${analysis.phLevel}'),
+                      _buildPropertyChip(analysis.texture),
+                      // Add a chip to indicate if recommendations are available
+                      if (analysis.hasRecommendations)
+                        _buildPropertyChip('Recommendations ✓', isRecommendation: true),
                     ],
                   ),
-                  const SizedBox(height: 4),
+
+                  const SizedBox(height: 8),
+
+                  // Make organic matter text responsive
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(
-                        Icons.location_on,
-                        size: 14,
-                        color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                      ),
-                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          dataset['location'] as String? ?? 'No location',
+                          'Organic Matter: ${analysis.organicMatter}',
                           style: TextStyle(
                             fontSize: 14,
-                            color: isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                            color: Colors.grey.shade700,
                           ),
-                          overflow: TextOverflow.ellipsis, // Prevent text overflow
+                          overflow: TextOverflow.ellipsis, // Add text overflow handling
+                          maxLines: 1, // Limit to one line
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildNutrientChip(context, 'N', _getNutrientLevel(nutrients['nitrogen'])),
-                      _buildNutrientChip(context, 'P', _getNutrientLevel(nutrients['phosphorus'])),
-                      _buildNutrientChip(context, 'K', _getNutrientLevel(nutrients['potassium'])),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: Colors.grey.shade600,
+                      ),
                     ],
                   ),
                 ],
               ),
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  String _getNutrientLevel(dynamic value) {
-    if (value == null) return 'Unknown';
-
-    double numValue;
-    if (value is int) {
-      numValue = value.toDouble();
-    } else if (value is double) {
-      numValue = value;
-    } else if (value is String) {
-      try {
-        numValue = double.parse(value);
-      } catch (e) {
-        return value; // Return the string value if it can't be parsed
-      }
-    } else {
-      return 'Unknown';
-    }
-
-    // Determine level based on value
-    if (numValue < 10) return 'Low';
-    if (numValue < 20) return 'Medium';
-    return 'High';
-  }
-
-  Widget _buildNutrientChip(BuildContext context, String nutrient, String level) {
-    Color chipColor;
-    Color textColor;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    switch (level) {
-      case 'Low':
-        chipColor = isDarkMode ? Colors.red.shade900 : Colors.red.shade100;
-        textColor = isDarkMode ? Colors.red.shade100 : Colors.red.shade900;
-        break;
-      case 'Medium':
-        chipColor = isDarkMode ? Colors.amber.shade900 : Colors.amber.shade100;
-        textColor = isDarkMode ? Colors.amber.shade100 : Colors.amber.shade900;
-        break;
-      case 'High':
-        chipColor = isDarkMode ? Colors.green.shade900 : Colors.green.shade100;
-        textColor = isDarkMode ? Colors.green.shade100 : Colors.green.shade900;
-        break;
-      default:
-        chipColor = isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200;
-        textColor = isDarkMode ? Colors.grey.shade200 : Colors.grey.shade800;
-    }
-
-    return Flexible(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: chipColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          '$nutrient: $level',
-          style: TextStyle(
-            color: textColor,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-          textAlign: TextAlign.center,
-          overflow: TextOverflow.ellipsis, // Prevent text overflow
-        ),
-      ),
-    );
-  }
-
-  void _showDatasetOptions(BuildContext context, Map<String, dynamic> dataset) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDarkMode ? Colors.grey.shade900 : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(Icons.visibility, color: Colors.blue.shade700),
-                title: const Text('View Details'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Navigate to dataset details screen
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  dataset['is_favorite'] == true
-                      ? Icons.star
-                      : Icons.star_border,
-                  color: Colors.amber.shade700,
-                ),
-                title: Text(
-                  dataset['is_favorite'] == true
-                      ? 'Remove from Favorites'
-                      : 'Add to Favorites',
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Toggle favorite status
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.share, color: Colors.green.shade700),
-                title: const Text('Share'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Implement share functionality
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.delete_outline, color: Colors.red.shade700),
-                title: const Text('Delete'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _confirmDelete(context, dataset);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _confirmDelete(BuildContext context, Map<String, dynamic> dataset) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Delete Dataset'),
-          content: Text('Are you sure you want to delete "${dataset['name']}"? This action cannot be undone.'),
-          backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Cancel',
-                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _deleteDataset(dataset['id']);
-              },
-              child: Text(
-                'Delete',
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-            ),
           ],
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPropertyChip(String label, {bool isRecommendation = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: isRecommendation ? Colors.blue.shade100 : Colors.green.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: isRecommendation ? Colors.blue.shade800 : Colors.green.shade800,
+          fontWeight: FontWeight.bold,
+        ),
+        // Add text overflow handling
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }
+

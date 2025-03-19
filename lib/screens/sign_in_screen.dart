@@ -15,6 +15,38 @@ class _SignInScreenState extends State<SignInScreen> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _rememberMe = false;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load saved credentials
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    // Check if remember me was enabled
+    final rememberMe = await authProvider.isRememberMeEnabled();
+
+    if (rememberMe) {
+      // Get saved email
+      final savedEmail = await authProvider.getSavedEmail();
+
+      if (savedEmail != null && mounted) {
+        setState(() {
+          _emailController.text = savedEmail;
+          _rememberMe = true;
+          _isInitialized = true;
+        });
+      }
+    } else {
+      setState(() {
+        _isInitialized = true;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -39,7 +71,11 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
-    final success = await authProvider.signIn(email, password);
+    final success = await authProvider.signIn(
+      email,
+      password,
+      rememberMe: _rememberMe,
+    );
 
     if (success && mounted) {
       Navigator.pushReplacementNamed(context, '/home_container');
@@ -65,6 +101,17 @@ class _SignInScreenState extends State<SignInScreen> {
       systemNavigationBarColor: isDarkMode ? Colors.grey.shade900 : Colors.white,
       systemNavigationBarIconBrightness: isDarkMode ? Brightness.light : Brightness.dark,
     ));
+
+    // Show loading indicator while initializing
+    if (!_isInitialized) {
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Colors.green.shade600,
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -153,63 +200,30 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Remember me and Forgot password
+                // Remember me checkbox
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: Checkbox(
-                            value: _rememberMe,
-                            onChanged: (value) {
-                              setState(() {
-                                _rememberMe = value ?? false;
-                              });
-                            },
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            activeColor: Colors.green.shade600,
-                          ),
+                    SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: Checkbox(
+                        value: _rememberMe,
+                        onChanged: (value) {
+                          setState(() {
+                            _rememberMe = value ?? false;
+                          });
+                        },
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Remember me',
-                          style: TextStyle(
-                            color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
-                          ),
-                        ),
-                      ],
+                        activeColor: Colors.green.shade600,
+                      ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        // TODO: Implement forgot password
-                        final email = _emailController.text.trim();
-                        if (email.isNotEmpty) {
-                          authProvider.resetPassword(email);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Password reset email sent. Check your inbox.'),
-                            ),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter your email address'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      },
-                      child: Text(
-                        'Forgot password?',
-                        style: TextStyle(
-                          color: Colors.green.shade600,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Remember me',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                       ),
                     ),
                   ],
@@ -279,3 +293,4 @@ class _SignInScreenState extends State<SignInScreen> {
     );
   }
 }
+

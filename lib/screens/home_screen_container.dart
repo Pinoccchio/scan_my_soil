@@ -13,11 +13,7 @@ class HomeScreenContainer extends StatefulWidget {
 
 class _HomeScreenContainerState extends State<HomeScreenContainer> {
   int _selectedIndex = 0;
-  final List<Widget> _screens = [
-    const ScanSection(),
-    const DatasetsSection(),
-    const ProfileSection(),
-  ];
+  late List<Widget> _screens;
 
   final List<String> _titles = [
     'Scan',
@@ -28,7 +24,18 @@ class _HomeScreenContainerState extends State<HomeScreenContainer> {
   @override
   void initState() {
     super.initState();
-    // Don't access Theme.of(context) here
+    // Initialize screens with the navigation callback
+    _screens = [
+      const ScanSection(),
+      DatasetsSection(
+        onScanButtonPressed: () {
+          setState(() {
+            _selectedIndex = 0; // Navigate to Scan tab
+          });
+        },
+      ),
+      const ProfileSection(),
+    ];
   }
 
   @override
@@ -100,3 +107,4 @@ class _HomeScreenContainerState extends State<HomeScreenContainer> {
     );
   }
 }
+

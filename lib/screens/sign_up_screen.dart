@@ -70,7 +70,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final success = await authProvider.signUp(email, password, name);
 
     if (success && mounted) {
-      Navigator.pushReplacementNamed(context, '/home_container');
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account created successfully! Please sign in.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Sign out the user if they were automatically signed in
+      await authProvider.signOut();
+
+      // Navigate to sign in screen instead of home
+      Navigator.pushReplacementNamed(context, '/signin');
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -79,6 +91,162 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
       );
     }
+  }
+
+  void _showTermsOfServiceDialog() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
+        title: const Text('Terms of Service'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Last Updated: March 19, 2025',
+                style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '1. Acceptance of Terms',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'By accessing or using ScanMySoil, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the application.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '2. Description of Service',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'ScanMySoil provides soil analysis services using artificial intelligence. The application allows users to take photos of soil samples and receive analysis results and recommendations.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '3. User Accounts',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You must immediately notify us of any unauthorized use of your account.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '4. User Content',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'By uploading soil images or other content to ScanMySoil, you grant us a non-exclusive, worldwide, royalty-free license to use, store, and process that content for the purpose of providing our services.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '5. Limitation of Liability',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'ScanMySoil provides soil analysis as a guide only. We do not guarantee the accuracy of results and are not liable for any decisions made based on the analysis provided.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Close',
+              style: TextStyle(color: Colors.green.shade600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPrivacyPolicyDialog() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDarkMode ? Colors.grey.shade800 : Colors.white,
+        title: const Text('Privacy Policy'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Last Updated: March 19, 2025',
+                style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '1. Information We Collect',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'We collect information you provide directly, including account information (name, email), soil images, and analysis data. We also collect usage data and device information.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '2. How We Use Your Information',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'We use your information to provide and improve our services, process soil analysis, communicate with you, and ensure security of your account.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '3. Data Storage',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Your data is stored securely on Supabase servers. Soil images and analysis results are linked to your account and are not shared with other users.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                '4. Your Rights',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You have the right to access, correct, or delete your personal data. You can also request a copy of your data or withdraw consent at any time.',
+                style: TextStyle(color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Close',
+              style: TextStyle(color: Colors.green.shade600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -244,8 +412,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Terms and conditions
+                // Terms and conditions with clickable links
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(
                       height: 24,
@@ -265,32 +434,43 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text.rich(
-                        TextSpan(
-                          text: 'I agree to the ',
-                          style: TextStyle(
-                            color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                      child: Wrap(
+                        children: [
+                          Text(
+                            'I agree to the ',
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
+                            ),
                           ),
-                          children: [
-                            TextSpan(
-                              text: 'Terms of Service',
+                          GestureDetector(
+                            onTap: _showTermsOfServiceDialog,
+                            child: Text(
+                              'Terms of Service',
                               style: TextStyle(
                                 color: Colors.green.shade600,
                                 fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
                               ),
                             ),
-                            const TextSpan(
-                              text: ' and ',
+                          ),
+                          Text(
+                            ' and ',
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.grey.shade300 : Colors.grey.shade700,
                             ),
-                            TextSpan(
-                              text: 'Privacy Policy',
+                          ),
+                          GestureDetector(
+                            onTap: _showPrivacyPolicyDialog,
+                            child: Text(
+                              'Privacy Policy',
                               style: TextStyle(
                                 color: Colors.green.shade600,
                                 fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -366,3 +546,4 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 }
+

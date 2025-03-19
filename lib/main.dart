@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_screen_container.dart';
-import 'screens/scan_screen.dart';
-import 'screens/results_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/sign_in_screen.dart';
 import 'screens/sign_up_screen.dart';
@@ -101,8 +99,6 @@ class ScanMySoilApp extends StatelessWidget {
       routes: {
         '/signin': (context) => const SignInScreen(),
         '/home_container': (context) => const HomeScreenContainer(),
-        '/scan': (context) => const ScanScreen(),
-        '/results': (context) => const ResultsScreen(),
         '/history': (context) => const HistoryScreen(),
         '/signup': (context) => const SignUpScreen(),
         '/profile_edit': (context) => const ProfileEditScreen(),
