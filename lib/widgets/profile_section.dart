@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../services/supabase_service.dart';
 import '../screens/profile_edit_screen.dart';
 import 'profile_picture_preview.dart';
+import '../screens/about_screen.dart';
 
 class ProfileSection extends StatefulWidget {
   const ProfileSection({super.key});
@@ -440,7 +441,10 @@ class _ProfileSectionState extends State<ProfileSection> {
                 icon: Icons.info_outline,
                 title: 'About',
                 onTap: () {
-                  // TODO: Navigate to about screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AboutScreen()),
+                  );
                 },
               ),
 

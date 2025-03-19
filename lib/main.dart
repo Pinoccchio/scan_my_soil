@@ -14,6 +14,12 @@ import 'providers/auth_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Lock orientation to portrait mode only
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   // Initialize Supabase
   await SupabaseService().initialize();
 
@@ -36,9 +42,14 @@ void main() async {
   );
 }
 
-class ScanMySoilApp extends StatelessWidget {
+class ScanMySoilApp extends StatefulWidget {
   const ScanMySoilApp({super.key});
 
+  @override
+  State<ScanMySoilApp> createState() => _ScanMySoilAppState();
+}
+
+class _ScanMySoilAppState extends State<ScanMySoilApp> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -163,3 +174,4 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return _isAuthenticated ? const HomeScreenContainer() : const SignInScreen();
   }
 }
+
