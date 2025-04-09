@@ -19,12 +19,14 @@ class SupabaseService {
   static const String _avatarsBucket = 'avatars';
   static const String _soilImagesBucket = 'soil.images'; // Updated to the correct bucket name
 
+  // Direct connection details instead of environment variables
+  static const String _supabaseUrl = 'https://wvxymmmrhnvbrxorxzyq.supabase.co';
+  static const String _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2eHltbW1yaG52YnJ4b3J4enlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIxMjY2OTEsImV4cCI6MjA1NzcwMjY5MX0.oj_axhKN36w87yDIUo3y1aliOVPzEaesKTCpcewPnnA';
+
   Future<void> initialize() async {
     await Supabase.initialize(
-      url: const String.fromEnvironment('SUPABASE_URL',
-          defaultValue: 'https://wvxymmmrhnvbrxorxzyq.supabase.co'),
-      anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY',
-          defaultValue: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2eHltbW1yaG52YnJ4b3J4enlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIxMjY2OTEsImV4cCI6MjA1NzcwMjY5MX0.oj_axhKN36w87yDIUo3y1aliOVPzEaesKTCpcewPnnA'),
+      url: _supabaseUrl,
+      anonKey: _supabaseAnonKey,
     );
 
     _client = Supabase.instance.client;
@@ -365,4 +367,3 @@ class SupabaseService {
     }
   }
 }
-

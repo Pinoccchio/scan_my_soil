@@ -6,7 +6,7 @@ import '../models/soil_analysis.dart';
 class GeminiService {
   // IMPORTANT: Be careful with hardcoded API keys in production apps
   // This key will be visible in your app's binary and could be extracted
-  static const String _apiKey = "YOUR_API_KEY"; // Replace with your actual API key
+  static const String _apiKey = "AIzaSyBomw7nWLyhb8uAPDhast7TtaLH-DSUw7Y"; // Replace with your actual API key
   static const String _modelName = 'gemini-1.5-pro';
 
   static Future<SoilAnalysis> analyzeSoilImage(File imageFile) async {
