@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path/path.dart' as path;
 import '../models/soil_analysis.dart';
+import 'dart:async';
+import 'network_helper.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -14,6 +16,7 @@ class SupabaseService {
   SupabaseService._internal();
 
   late final SupabaseClient _client;
+  bool _isInitialized = false;
 
   // Storage bucket names - update these to match your Supabase buckets
   static const String _avatarsBucket = 'avatars';
@@ -23,16 +26,86 @@ class SupabaseService {
   static const String _supabaseUrl = 'https://wvxymmmrhnvbrxorxzyq.supabase.co';
   static const String _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2eHltbW1yaG52YnJ4b3J4enlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIxMjY2OTEsImV4cCI6MjA1NzcwMjY5MX0.oj_axhKN36w87yDIUo3y1aliOVPzEaesKTCpcewPnnA';
 
-  Future<void> initialize() async {
-    await Supabase.initialize(
-      url: _supabaseUrl,
-      anonKey: _supabaseAnonKey,
-    );
-
-    _client = Supabase.instance.client;
+  // Extract the host from the URL
+  static String get _supabaseHost {
+    final uri = Uri.parse(_supabaseUrl);
+    return uri.host;
   }
 
-  SupabaseClient get client => _client;
+  Future<void> initialize() async {
+    if (_isInitialized) {
+      return;
+    }
+
+    try {
+      // First check if we have internet
+      final hasInternet = await NetworkHelper.hasInternetConnection();
+      if (!hasInternet) {
+        throw Exception('No internet connection available');
+      }
+
+      // Pre-resolve the Supabase host to warm up DNS
+      final hostResolved = await NetworkHelper.canResolveHost(_supabaseHost);
+      if (!hostResolved) {
+        debugPrint('Warning: Could not resolve Supabase host, but continuing anyway');
+      }
+
+      // Initialize with retry logic
+      await _initializeWithRetry();
+
+      _isInitialized = true;
+      debugPrint('Supabase initialized successfully');
+    } catch (e) {
+      debugPrint('Error initializing Supabase: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _initializeWithRetry({int maxAttempts = 3}) async {
+    int attempts = 0;
+    Exception? lastException;
+
+    while (attempts < maxAttempts) {
+      try {
+        attempts++;
+        debugPrint('Attempting to initialize Supabase (attempt $attempts)');
+
+        // Add a small delay before initialization to allow DNS to resolve
+        await Future.delayed(Duration(milliseconds: 500 * attempts));
+
+        // Updated initialization without persistSession parameter
+        await Supabase.initialize(
+          url: _supabaseUrl,
+          anonKey: _supabaseAnonKey,
+          authOptions: const FlutterAuthClientOptions(
+            autoRefreshToken: true,
+          ),
+          debug: false,
+        ).timeout(const Duration(seconds: 15));
+
+        _client = Supabase.instance.client;
+        return; // Success, exit the retry loop
+      } catch (e) {
+        lastException = Exception('Failed to initialize Supabase: $e');
+        debugPrint('Initialization attempt $attempts failed: $e');
+
+        // Wait before retrying
+        if (attempts < maxAttempts) {
+          await Future.delayed(Duration(seconds: attempts));
+        }
+      }
+    }
+
+    // If we get here, all attempts failed
+    throw lastException ?? Exception('Failed to initialize Supabase after $maxAttempts attempts');
+  }
+
+  SupabaseClient get client {
+    if (!_isInitialized) {
+      throw Exception('Supabase not initialized. Call initialize() first.');
+    }
+    return _client;
+  }
 
   // Authentication methods
   Future<AuthResponse> signUp({
@@ -40,46 +113,76 @@ class SupabaseService {
     required String password,
     required String fullName,
   }) async {
-    final response = await _client.auth.signUp(
-      email: email,
-      password: password,
-      data: {
-        'full_name': fullName,
-      },
-    );
+    try {
+      // Ensure we have internet and can resolve the host
+      final hasInternet = await NetworkHelper.hasInternetConnection();
+      if (!hasInternet) {
+        throw Exception('No internet connection available');
+      }
 
-    // We don't need to manually create a profile record anymore
-    // The database trigger we defined in our SQL script will handle this
+      final response = await _client.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'full_name': fullName,
+        },
+      ).timeout(const Duration(seconds: 15));
 
-    return response;
+      return response;
+    } catch (e) {
+      debugPrint('Error signing up: $e');
+      rethrow;
+    }
   }
 
   Future<AuthResponse> signIn({
     required String email,
     required String password,
   }) async {
-    return await _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    try {
+      // Ensure we have internet and can resolve the host
+      final hasInternet = await NetworkHelper.hasInternetConnection();
+      if (!hasInternet) {
+        throw Exception('No internet connection available');
+      }
+
+      return await _client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      ).timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('Error signing in: $e');
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
-    await _client.auth.signOut();
+    try {
+      await _client.auth.signOut().timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('Error signing out: $e');
+      rethrow;
+    }
   }
 
   // User profile methods
   Future<Map<String, dynamic>?> getUserProfile() async {
-    final user = _client.auth.currentUser;
-    if (user == null) return null;
+    try {
+      final user = _client.auth.currentUser;
+      if (user == null) return null;
 
-    final response = await _client
-        .from('profiles')
-        .select()
-        .eq('id', user.id)
-        .single();
+      final response = await _client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .single()
+          .timeout(const Duration(seconds: 10));
 
-    return response;
+      return response;
+    } catch (e) {
+      debugPrint('Error getting user profile: $e');
+      rethrow;
+    }
   }
 
   Future<void> updateUserProfile({

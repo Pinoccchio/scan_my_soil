@@ -10,6 +10,7 @@ import 'screens/profile_edit_screen.dart';
 import 'providers/theme_provider.dart';
 import 'services/supabase_service.dart';
 import 'providers/auth_provider.dart';
+import 'services/network_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,8 +21,24 @@ void main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  // Initialize Supabase
-  await SupabaseService().initialize();
+  // Initialize Supabase with retry logic
+  bool supabaseInitialized = false;
+  for (int i = 0; i < 3; i++) {
+    try {
+      // Pre-warm DNS resolution
+      await NetworkHelper.canResolveHost('wvxymmmrhnvbrxorxzyq.supabase.co');
+
+      // Initialize Supabase
+      await SupabaseService().initialize();
+      supabaseInitialized = true;
+      break;
+    } catch (e) {
+      debugPrint('Supabase initialization attempt ${i+1} failed: $e');
+      if (i < 2) {
+        await Future.delayed(Duration(seconds: i + 1));
+      }
+    }
+  }
 
   // Set system UI overlay style globally
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
@@ -37,13 +54,18 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
-      child: const ScanMySoilApp(),
+      child: ScanMySoilApp(supabaseInitialized: supabaseInitialized),
     ),
   );
 }
 
 class ScanMySoilApp extends StatefulWidget {
-  const ScanMySoilApp({super.key});
+  final bool supabaseInitialized;
+
+  const ScanMySoilApp({
+    super.key,
+    required this.supabaseInitialized,
+  });
 
   @override
   State<ScanMySoilApp> createState() => _ScanMySoilAppState();
@@ -106,7 +128,9 @@ class _ScanMySoilAppState extends State<ScanMySoilApp> {
           ),
         ),
       ),
-      home: const AuthWrapper(),
+      home: widget.supabaseInitialized
+          ? const AuthWrapper()
+          : const ConnectionErrorScreen(),
       routes: {
         '/signin': (context) => const SignInScreen(),
         '/home_container': (context) => const HomeScreenContainer(),
@@ -114,6 +138,66 @@ class _ScanMySoilAppState extends State<ScanMySoilApp> {
         '/signup': (context) => const SignUpScreen(),
         '/profile_edit': (context) => const ProfileEditScreen(),
       },
+    );
+  }
+}
+
+class ConnectionErrorScreen extends StatelessWidget {
+  const ConnectionErrorScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.wifi_off,
+                size: 80,
+                color: Colors.red.shade400,
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Connection Error',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Unable to connect to the server. Please check your internet connection and try again.',
+                style: TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: () {
+                  // Restart the app
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SplashScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Try Again'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -128,6 +212,7 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _isLoading = true;
   bool _isAuthenticated = false;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -150,14 +235,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
         setState(() {
           _isAuthenticated = isAuthenticated;
           _isLoading = false;
+          _hasError = false;
         });
       }
     } catch (e) {
       // Handle any errors
+      debugPrint('Error checking auth state: $e');
       if (mounted) {
         setState(() {
           _isAuthenticated = false;
           _isLoading = false;
+          _hasError = true;
         });
       }
     }
@@ -170,8 +258,61 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const SplashScreen();
     }
 
+    // Show error screen if there was an error
+    if (_hasError) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 80,
+                  color: Colors.red.shade400,
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Authentication Error',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'There was a problem connecting to the authentication service. Please try again.',
+                  style: TextStyle(fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _hasError = false;
+                    });
+                    _checkAuth();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Try Again'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     // After loading, show appropriate screen
     return _isAuthenticated ? const HomeScreenContainer() : const SignInScreen();
   }
 }
-
